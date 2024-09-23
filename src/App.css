@@ -1,38 +1,102 @@
+body {
+  font-family: 'Arial', sans-serif;
+  background-color: #f4f4f4;
+  margin: 0;
+  padding: 0;
+}
+
 .App {
   text-align: center;
+  padding: 50px;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.header {
+  margin-bottom: 40px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+.header h1 {
+  font-size: 48px;
+  margin: 0;
+  color: #333;
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.header p {
+  color: #666;
+  margin: 10px 0 20px;
+  font-size: 18px;
+}
+
+.search-section {
+  display: flex;
+  justify-content: center;
+  margin: 40px 0;
+}
+
+.search-section input {
+  padding: 12px;
+  width: 400px;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  font-size: 16px;
+  outline: none;
+}
+
+.search-section input:focus {
+  border-color: #333;
+}
+
+.search-section button {
+  padding: 12px 20px;
+  background-color: orange;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  margin-left: 10px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.search-section button:hover {
+  background-color: darkorange;
+}
+
+.summary-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
 }
 
-.App-link {
-  color: #61dafb;
+.card {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin: 20px;
+  width: 500px;
+  text-align: left;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.card h3 {
+  margin: 0 0 10px;
+  color: #333;
+}
+
+.card p {
+  margin: 5px 0;
+  color: #666;
+}
+
+strong {
+  color: #333;
+}
+
+/* Footer Section for Latest Block Info */
+.footer {
+  margin-top: 40px;
+  font-size: 12px;
+  color: #666;
+}
+
+.latest-block {
+  font-size: 14px;
 }
