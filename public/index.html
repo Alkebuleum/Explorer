@@ -6,8 +6,7 @@
   <link rel="icon" type="image/svg+xml" href="%PUBLIC_URL%/favicon.svg" />
   <link rel="alternate icon" href="%PUBLIC_URL%/favicon.ico" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f6f4f1" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f6f4f1" />
   <meta name="description" content="AlkeScan — explore blocks, transactions, tokens and verified contracts on the Alkebuleum blockchain." />
   <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
   <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
@@ -21,14 +20,11 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:site" content="@Alkebuleum" />
 
-  <!-- Apply the theme before first paint: the visitor's saved choice, else their OS setting. -->
+  <!-- Apply the theme before first paint: light by default, dark only if the visitor chose it. -->
   <script>
-    (function () {
-      var saved = null;
-      try { saved = localStorage.getItem("theme"); } catch (e) { }
-      var dark = saved ? saved === "dark" : !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-      document.documentElement.classList.toggle("dark", dark);
-    })();
+    try {
+      document.documentElement.classList.toggle("dark", localStorage.getItem("theme") === "dark");
+    } catch (e) { }
   </script>
 
   <title>AlkeScan — Alkebuleum Explorer</title>
