@@ -1,15 +1,15 @@
 import React from "react";
 
-export default function Card({ title, actions, children }) {
+export default function Card({ title, actions, children, flush = false, className = "" }) {
     return (
-        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:bg-black dark:border-white/10">
+        <section className={`rounded-2xl border border-line bg-surface ${className}`}>
             {(title || actions) && (
-                <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100/80 dark:border-white/5">
-                    {title ? <h3 className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</h3> : <span />}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3.5">
+                    {title ? <h3 className="font-display text-[15px] font-medium text-ink">{title}</h3> : <span />}
                     {actions}
                 </div>
             )}
-            <div className="p-5">{children}</div>
+            <div className={flush ? "" : "p-5"}>{children}</div>
         </section>
     );
 }

@@ -1,37 +1,56 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { SearchIcon } from "./Icons";
 
-export default function SearchBar() {
+// Maps a free-form query to a route, or null if it isn't recognisable.
+export function routeForQuery(raw) {
+    const v = raw.trim().replace(/,/g, "");
+    if (/^0x[a-fA-F0-9]{64}$/.test(v)) return `/tx/${v}`;
+    if (/^0x[a-fA-F0-9]{40}$/.test(v)) return `/address/${v}`;
+    if (/^[0-9]+$/.test(v)) return `/block/${v}`;
+    if (/^\/(tx|address|block)\//.test(v)) return v;
+    return null;
+}
+
+export default function SearchBar({ size = "lg" }) {
     const [q, setQ] = useState("");
+    const [invalid, setInvalid] = useState(false);
     const nav = useNavigate();
+    const lg = size === "lg";
 
-    const go = () => {
-        const v = q.trim().replace(/,/g, "");
-        if (!v) return;
-        if (/^0x[a-fA-F0-9]{64}$/.test(v)) return nav(`/tx/${v}`);
-        if (/^0x[a-fA-F0-9]{40}$/.test(v)) return nav(`/address/${v}`);
-        if (/^[0-9]+$/.test(v)) return nav(`/block/${v}`);
-        if (v.startsWith("/tx/0x")) return nav(v);
-        if (v.startsWith("/address/0x")) return nav(v);
-        if (v.startsWith("/block/")) return nav(v);
+    const go = (e) => {
+        e.preventDefault();
+        const to = routeForQuery(q);
+        if (!to) return setInvalid(!!q.trim());
         setQ("");
+        nav(to);
     };
 
     return (
-        <div className="flex gap-2">
-            <input
-                className="flex-1 h-11 rounded-full border border-slate-300 bg-white px-4 text-sm outline-none focus:border-slate-400 dark:bg-transparent dark:border-white/10 dark:text-slate-100"
-                placeholder="Block #, tx hash, or address…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && go()}
-            />
-            <button
-                onClick={go}
-                className="h-11 rounded-full bg-slate-900 px-5 text-sm font-medium text-white dark:bg-white dark:text-black"
+        <form onSubmit={go} className="w-full">
+            <div
+                className={`flex items-center gap-2 rounded-full border bg-surface transition-colors focus-within:border-violet ${
+                    invalid ? "border-rose-500/60" : "border-line-2"
+                } ${lg ? "p-1.5 pl-5" : "p-1 pl-3.5"}`}
             >
-                Search
-            </button>
-        </div>
+                <SearchIcon className={`shrink-0 text-ink-mute ${lg ? "h-5 w-5" : "h-4 w-4"}`} />
+                <input
+                    className={`min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-mute ${lg ? "py-2 text-[15px]" : "py-1 text-sm"}`}
+                    placeholder={lg ? "Search by address, transaction hash or block number" : "Address / tx hash / block"}
+                    value={q}
+                    onChange={(e) => { setQ(e.target.value); setInvalid(false); }}
+                    aria-label="Search"
+                    spellCheck={false}
+                />
+                <button type="submit" className={`btn-violet ${lg ? "px-6 py-2.5" : "btn-sm py-1.5"}`}>
+                    Search
+                </button>
+            </div>
+            {invalid && (
+                <p className="mt-2 pl-5 text-xs text-rose-600 dark:text-rose-300">
+                    Enter a 0x… address (40 hex chars), a transaction hash (64 hex chars), or a block number.
+                </p>
+            )}
+        </form>
     );
 }

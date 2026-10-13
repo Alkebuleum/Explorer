@@ -1,0 +1,151 @@
+import React, { Suspense, createContext, lazy, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { rpc } from "../../lib/rpc";
+import { shortHash } from "../../lib/format";
+
+const ConnectModal = lazy(() => import("./WalletModals").then((m) => ({ default: m.ConnectModal })));
+const SignModal = lazy(() => import("./WalletModals").then((m) => ({ default: m.SignModal })));
+
+const STORAGE_KEY = "alkescan:wallet";
+const WalletCtx = createContext(null);
+
+const load = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || null; } catch { return null; } };
+const save = (c) => { try { c ? localStorage.setItem(STORAGE_KEY, JSON.stringify(c)) : localStorage.removeItem(STORAGE_KEY); } catch { } };
+
+async function waitMined(txHash) {
+    for (let i = 0; i < 80; i++) {
+        const r = await rpc("eth_getTransactionReceipt", [txHash]).catch(() => null);
+        if (r) {
+            if (parseInt(r.status, 16) !== 1) throw new Error("Transaction reverted on chain.");
+            return r;
+        }
+        await new Promise((res) => setTimeout(res, 1500));
+    }
+    throw new Error("Transaction not confirmed yet. Check your wallet for its status.");
+}
+
+export function WalletProvider({ children }) {
+    const [conn, setConn] = useState(load);
+    const [connecting, setConnecting] = useState(false);
+    const [signQr, setSignQr] = useState(null); // { uri, label }
+    const pending = useRef(null); // { resolve, reject } for openConnect()
+
+    // A browser-wallet session is only kept while the wallet still exposes the account.
+    useEffect(() => {
+        if (conn?.type !== "injected" && conn?.type !== "nuru-browser") return;
+        if (!window.ethereum) { setConn(null); save(null); return; }
+        window.ethereum.request({ method: "eth_accounts" }).then((accs) => {
+            if (!accs?.length) { setConn(null); save(null); }
+        }).catch(() => { });
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Follow account switches / disconnects in the browser wallet.
+    useEffect(() => {
+        if (conn?.type !== "injected" || !window.ethereum?.on) return;
+        const onAccounts = (accs) => {
+            const next = accs?.[0] ? { type: "injected", address: accs[0] } : null;
+            setConn(next);
+            save(next);
+        };
+        window.ethereum.on("accountsChanged", onAccounts);
+        return () => window.ethereum.removeListener?.("accountsChanged", onAccounts);
+    }, [conn?.type]);
+
+    const finishConnect = (c) => {
+        setConn(c);
+        save(c);
+        setConnecting(false);
+        pending.current?.resolve(c);
+        pending.current = null;
+    };
+
+    const cancelConnect = () => {
+        setConnecting(false);
+        pending.current?.reject(new Error("Wallet connection cancelled."));
+        pending.current = null;
+    };
+
+    // Opens the connect dialog; resolves with the connection.
+    const openConnect = useCallback(() => {
+        setConnecting(true);
+        return new Promise((resolve, reject) => { pending.current = { resolve, reject }; });
+    }, []);
+
+    const ensureConnected = useCallback(() => (conn ? Promise.resolve(conn) : openConnect()), [conn, openConnect]);
+
+    const disconnect = useCallback(() => { setConn(null); save(null); }, []);
+
+    // Sends {to, data, value} from the connected wallet; resolves with the
+    // tx hash once it's mined.
+    const sendTransaction = useCallback(async (tx, label = "Approve transaction") => {
+        const c = await ensureConnected();
+        const value = BigInt(tx.value || 0);
+        if (c.type === "nuru") {
+            try {
+                const { nuruSendTransaction } = await import("../../lib/nuru");
+                return await nuruSendTransaction(c, { ...tx, value }, (uri) => setSignQr({ uri, label }));
+            } finally {
+                setSignQr(null);
+            }
+        }
+        if (c.type === "nuru-browser") {
+            // The Nuru browser wraps the call through the Nuru Account itself.
+            const hash = await window.ethereum.request({
+                method: "eth_sendTransaction",
+                params: [{ to: tx.to, data: tx.data || "0x", value: "0x" + value.toString(16) }],
+            });
+            await waitMined(hash);
+            return hash;
+        }
+        const { getSigner } = await import("../../lib/wallet");
+        const signer = await getSigner();
+        const sent = await signer.sendTransaction({ to: tx.to, data: tx.data || "0x", value });
+        await waitMined(sent.hash);
+        return sent.hash;
+    }, [ensureConnected]);
+
+    return (
+        <WalletCtx.Provider value={{ conn, openConnect, ensureConnected, disconnect, sendTransaction }}>
+            {children}
+            <Suspense fallback={null}>
+                {connecting && <ConnectModal onConnected={finishConnect} onClose={cancelConnect} />}
+                {signQr && <SignModal uri={signQr.uri} label={signQr.label} />}
+            </Suspense>
+        </WalletCtx.Provider>
+    );
+}
+
+export function useWallet() {
+    const ctx = useContext(WalletCtx);
+    if (!ctx) throw new Error("useWallet must be used inside WalletProvider");
+    return ctx;
+}
+
+// Header control: connect, or show the connected account.
+export function WalletButton() {
+    const { conn, openConnect, disconnect } = useWallet();
+    const [open, setOpen] = useState(false);
+    if (!conn) {
+        return <button onClick={() => openConnect().catch(() => { })} className="btn-violet btn-sm py-2">Connect</button>;
+    }
+    const label = conn.handle || shortHash(conn.address, 4);
+    return (
+        <div className="relative">
+            <button onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-2 rounded-full border border-line-2 px-3 py-1.5 text-sm hover:border-violet">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                {label}
+            </button>
+            {open && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-line bg-surface p-3 text-sm shadow-xl">
+                    <div className="text-xs text-ink-mute">{conn.type === "injected" ? "Browser wallet" : "Nuru Account"}</div>
+                    <div className="mt-1 break-all font-mono text-xs">{conn.address}</div>
+                    {conn.ain && <div className="mt-1 text-xs text-ink-mute">AIN {conn.ain}</div>}
+                    <div className="mt-3 flex gap-2">
+                        <Link to={`/address/${conn.address}`} onClick={() => setOpen(false)} className="btn-ghost btn-sm flex-1">View</Link>
+                        <button onClick={() => { disconnect(); setOpen(false); }} className="btn-ghost btn-sm flex-1">Disconnect</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
