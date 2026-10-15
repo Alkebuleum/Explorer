@@ -24,7 +24,7 @@ export default function PayerBalance({ feeAlke, allowSigner = false, className =
 
     if (!conn) return null;
     const muted = `text-xs text-ink-mute ${className}`;
-    const who = conn.handle || (conn.ain ? `AIN ${conn.ain}` : shortHash(conn.address, 4));
+    const who = conn.handle || (conn.ain ? conn.ain : shortHash(conn.address, 4));
     const alke = (wei) => <span className="font-mono">{toAlke(wei)} ALKE</span>;
 
     if (plan === undefined) return <p className={muted}>Checking balance…</p>;
