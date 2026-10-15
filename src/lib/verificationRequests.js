@@ -23,7 +23,8 @@ const EXECUTE = new ethers.Interface(["function execute(address target, uint256 
 
 export async function payVerificationFee(send) {
   if (!ethers.isAddress(REGISTRY_TREASURY)) throw new Error("Fee treasury isn't configured.");
-  return send({ to: REGISTRY_TREASURY, value: FEE_WEI }, `Pay ${VERIFY_FEE_ALKE.toLocaleString()} ALKE publishing fee`);
+  // checkPayment accepts a direct payment, so the Nuru signer key may pay it.
+  return send({ to: REGISTRY_TREASURY, value: FEE_WEI, allowSigner: true }, `Pay ${VERIFY_FEE_ALKE.toLocaleString()} ALKE publishing fee`);
 }
 
 export async function submitVerificationRequest(record, { paymentTxHash, payer, payerAin }) {

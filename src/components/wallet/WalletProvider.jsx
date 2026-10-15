@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { rpc } from "../../lib/rpc";
 import { shortHash } from "../../lib/format";
 import { CopyButton } from "../ui/Bits";
+import { balanceOf, planPayment, shortMessage, toAlke } from "../../lib/payPlan";
 
 const ConnectModal = lazy(() => import("./WalletModals").then((m) => ({ default: m.ConnectModal })));
 const SignModal = lazy(() => import("./WalletModals").then((m) => ({ default: m.SignModal })));
@@ -23,44 +24,6 @@ async function waitMined(txHash) {
         await new Promise((res) => setTimeout(res, 1500));
     }
     throw new Error("Transaction not confirmed yet. Check your wallet for its status.");
-}
-
-export const toAlke = (wei) => (Number(wei / 10n ** 15n) / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 });
-const balanceOf = async (addr) => BigInt(await rpc("eth_getBalance", [addr, "latest"]));
-const PRIMARY_SELECTOR = "0xc6dbdf61"; // primary()
-
-// Where a payment's ALKE comes from and whether it covers `value`.
-// Null when we can't tell (a Nuru session without its Nuru Account address).
-export async function checkFunds(c, value) {
-    const isNuru = c.type === "nuru" || c.type === "nuru-browser";
-    if (isNuru && (!c.signer || c.address.toLowerCase() === c.signer.toLowerCase())) return null;
-    const balance = await balanceOf(c.address);
-    let gasKeyEmpty = false;
-    if (isNuru) {
-        // The primary key pays gas for execute(); linked keys go through the gasless relay.
-        const primary = await rpc("eth_call", [{ to: c.address, data: PRIMARY_SELECTOR }, "latest"]).catch(() => null);
-        if (primary && primary.length >= 66 && ("0x" + primary.slice(-40)).toLowerCase() === c.signer.toLowerCase()) {
-            gasKeyEmpty = (await balanceOf(c.signer)) === 0n;
-        }
-    }
-    return { isNuru, balance, enough: balance >= value, gasKeyEmpty };
-}
-
-// Checks funds before asking the wallet, so a shortfall gets a clear message
-// instead of a failed gas estimate (Besu reports those as "-32603 internal error").
-async function preflight(c, value) {
-    const f = await checkFunds(c, value);
-    if (!f) return;
-    if (!f.enough) {
-        throw new Error(
-            `${f.isNuru ? "Your Nuru Account" : "Your wallet"} (${shortHash(c.address)}) holds ${toAlke(f.balance)} ALKE, but this payment needs ${toAlke(value)} ALKE` +
-            `${f.isNuru ? "" : " plus a little for gas"}. ` +
-            (f.isNuru ? "Move ALKE into your Nuru Account (not just the signing key) and try again." : "Top it up and try again.")
-        );
-    }
-    if (f.gasKeyEmpty) {
-        throw new Error(`Your Nuru signing key (${shortHash(c.signer)}) has no ALKE to pay gas. Send it a small amount of ALKE and try again.`);
-    }
 }
 
 // rpc.alkebuleum.com currently fails every eth_estimateGas with "-32603
@@ -152,13 +115,40 @@ export function WalletProvider({ children }) {
     const sendTransaction = useCallback(async (tx, label = "Approve transaction") => {
         const c = await ensureConnected();
         const value = BigInt(tx.value || 0);
-        if (value > 0n) await preflight(c, value);
+        // Checking funds first gives a clear message instead of a failed gas estimate.
+        const plan = value > 0n ? await planPayment(c, value, { allowSigner: !!tx.allowSigner }) : null;
+        if (plan?.mode === "short") throw new Error(shortMessage(c, plan));
         try {
+            if (plan?.mode === "signer") return await sendFromSigner(c, tx, value, label);
+            if (plan?.mode === "consolidate") {
+                await sendFromSigner(c, { to: c.address }, plan.topUp, `Move ${toAlke(plan.topUp)} ALKE into your Nuru Account`);
+            }
             return await send(c, tx, value, label);
         } catch (e) {
             throw explainSendError(e);
         }
     }, [ensureConnected]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Sends straight from the Nuru signer key (Nuru doesn't wrap it), so the key
+    // is msg.sender and pays both the value and the gas.
+    const sendFromSigner = async (c, tx, value, label) => {
+        const gas = tx.gas ? BigInt(tx.gas) : await gasFor(c.signer, tx, value);
+        if (c.type === "nuru") {
+            try {
+                const { nuruSendFromSigner } = await import("../../lib/nuru");
+                return await nuruSendFromSigner(c, { ...tx, value, gas }, (uri) => setSignQr({ uri, label }));
+            } finally {
+                setSignQr(null);
+            }
+        }
+        // In the Nuru browser, `from` = the signer is how a dApp asks for a direct send.
+        const hash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{ from: c.signer, to: tx.to, data: tx.data || "0x", value: "0x" + value.toString(16), gas: "0x" + gas.toString(16) }],
+        });
+        await waitMined(hash);
+        return hash;
+    };
 
     const send = async (c, tx, value, label) => {
         if (c.type === "nuru") {

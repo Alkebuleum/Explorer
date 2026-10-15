@@ -169,6 +169,22 @@ export async function nuruSendTransaction(conn, { to, data = "0x", value = 0n, g
   return txHash;
 }
 
+// Sends {to, data, value} straight from the signer key (not through the Nuru
+// Account): the key is msg.sender and pays value and gas. Used to pay a fee from
+// the key, or to top up the Nuru Account before paying from it.
+export async function nuruSendFromSigner(conn, { to, data = "0x", value = 0n, gas = 60_000n }, onQr) {
+  const txHash = await nuruSign("eth_sendTransaction", [{
+    from: conn.signer,
+    to,
+    data,
+    value: "0x" + BigInt(value).toString(16),
+    gasPrice: "0x" + GAS_PRICE_WEI.toString(16),
+    gas: "0x" + BigInt(gas).toString(16),
+  }], onQr);
+  await waitForReceipt(txHash);
+  return txHash;
+}
+
 /* -------- Inside the Nuru in-app browser (window.ethereum._isNuruWallet) -------- */
 
 export const nuruInjected = () => (typeof window !== "undefined" && window.ethereum?._isNuruWallet ? window.ethereum : null);
