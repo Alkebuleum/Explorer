@@ -2,6 +2,7 @@ import React, { Suspense, createContext, lazy, useCallback, useContext, useEffec
 import { Link } from "react-router-dom";
 import { rpc } from "../../lib/rpc";
 import { shortHash } from "../../lib/format";
+import { CopyButton } from "../ui/Bits";
 
 const ConnectModal = lazy(() => import("./WalletModals").then((m) => ({ default: m.ConnectModal })));
 const SignModal = lazy(() => import("./WalletModals").then((m) => ({ default: m.SignModal })));
@@ -205,13 +206,34 @@ export function useWallet() {
 }
 
 // Header control: connect, or show the connected account.
+function BalanceLine({ wei, note }) {
+    return (
+        <div className="mt-0.5 text-xs text-ink-mute">
+            {wei === undefined ? "…" : wei === null ? "Balance unavailable" : <span className="font-mono text-ink-dim">{toAlke(wei)} ALKE</span>}
+            {note && <> · {note}</>}
+        </div>
+    );
+}
+
 export function WalletButton() {
     const { conn, openConnect, disconnect } = useWallet();
     const [open, setOpen] = useState(false);
+    const [balances, setBalances] = useState({});
+    // Balances load when the menu opens, so the header stays free of polling.
+    useEffect(() => {
+        if (!open || !conn) return;
+        const addrs = [...new Set([conn.address, conn.signer].filter(Boolean).map((a) => a.toLowerCase()))];
+        Promise.all(addrs.map((a) => balanceOf(a).then((b) => [a, b]).catch(() => [a, null])))
+            .then((rows) => setBalances(Object.fromEntries(rows)));
+    }, [open, conn]);
     if (!conn) {
         return <button onClick={() => openConnect().catch(() => { })} className="btn-violet btn-sm py-2">Connect</button>;
     }
-    const label = conn.handle || shortHash(conn.address, 4);
+    const isNuru = conn.type !== "injected" && !!conn.signer;
+    // A Nuru Account is identified by its handle/AIN; the key in use is what varies.
+    const label = conn.handle || (isNuru && conn.ain ? `AIN ${conn.ain}` : shortHash(isNuru ? conn.signer : conn.address, 4));
+    const close = () => setOpen(false);
+    const bal = (addr) => balances[addr?.toLowerCase()];
     return (
         <div className="relative">
             <button onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-2 rounded-full border border-line-2 px-3 py-1.5 text-sm hover:border-violet">
@@ -219,13 +241,34 @@ export function WalletButton() {
                 {label}
             </button>
             {open && (
-                <div className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-line bg-surface p-3 text-sm shadow-xl">
-                    <div className="text-xs text-ink-mute">{conn.type === "injected" ? "Browser wallet" : "Nuru Account"}</div>
-                    <div className="mt-1 break-all font-mono text-xs">{conn.address}</div>
-                    {conn.ain && <div className="mt-1 text-xs text-ink-mute">AIN {conn.ain}</div>}
+                <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-line bg-surface p-3 text-sm shadow-xl">
+                    {isNuru ? (
+                        <>
+                            <div className="text-xs text-ink-mute">Nuru Account</div>
+                            <div className="mt-0.5 font-medium">{conn.handle || (conn.ain ? `AIN ${conn.ain}` : shortHash(conn.address, 4))}</div>
+                            {conn.handle && conn.ain && <div className="text-xs text-ink-mute">AIN {conn.ain}</div>}
+                            <BalanceLine wei={bal(conn.address)} note="Holds funds, pays fees" />
+                            <div className="mt-3 text-xs text-ink-mute">Signer key</div>
+                            <div className="mt-0.5 flex items-start gap-1">
+                                <span className="min-w-0 break-all font-mono text-xs">{conn.signer}</span>
+                                <CopyButton value={conn.signer} />
+                            </div>
+                            <BalanceLine wei={bal(conn.signer)} note="Signs and pays gas" />
+                        </>
+                    ) : (
+                        <>
+                            <div className="text-xs text-ink-mute">Signer key · browser wallet</div>
+                            <div className="mt-0.5 flex items-start gap-1">
+                                <span className="min-w-0 break-all font-mono text-xs">{conn.address}</span>
+                                <CopyButton value={conn.address} />
+                            </div>
+                            <BalanceLine wei={bal(conn.address)} />
+                        </>
+                    )}
                     <div className="mt-3 flex gap-2">
-                        <Link to={`/address/${conn.address}`} onClick={() => setOpen(false)} className="btn-ghost btn-sm flex-1">View</Link>
-                        <button onClick={() => { disconnect(); setOpen(false); }} className="btn-ghost btn-sm flex-1">Disconnect</button>
+                        <Link to={`/address/${conn.address}`} onClick={close} className="btn-ghost btn-sm flex-1">{isNuru ? "Account" : "View"}</Link>
+                        {isNuru && <Link to={`/address/${conn.signer}`} onClick={close} className="btn-ghost btn-sm flex-1">Signer</Link>}
+                        <button onClick={() => { disconnect(); close(); }} className="btn-ghost btn-sm flex-1">Disconnect</button>
                     </div>
                 </div>
             )}
