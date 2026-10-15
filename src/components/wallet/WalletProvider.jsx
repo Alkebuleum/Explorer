@@ -62,13 +62,34 @@ async function preflight(c, value) {
     }
 }
 
+// rpc.alkebuleum.com currently fails every eth_estimateGas with "-32603
+// internal error", while eth_call and eth_createAccessList work. So we always
+// pass our own gas limit (as JollofSwap does); otherwise Nuru and MetaMask
+// estimate it themselves and fail. `from` is whoever is msg.sender of the call.
+async function gasFor(from, tx, value) {
+    const call = { from, to: tx.to, data: tx.data || "0x", value: "0x" + value.toString(16) };
+    let used = null;
+    try { used = BigInt(await rpc("eth_estimateGas", [call])); } catch { }
+    if (used == null) {
+        try { used = BigInt((await rpc("eth_createAccessList", [call, "latest"])).gasUsed); } catch { }
+    }
+    if (used == null) {
+        // Both failed: if the call itself reverts, say so instead of sending a doomed tx.
+        try { await rpc("eth_call", [call, "latest"]); } catch (e) {
+            throw new Error(`This transaction would fail on chain: ${e?.message || e}`);
+        }
+        return 300_000n;
+    }
+    return (used * 13n) / 10n + 10_000n;
+}
+
 // Turns the node's opaque gas-estimate failure into something actionable.
 function explainSendError(e) {
     const msg = String(e?.message || e);
     if (/-32603|internal error/i.test(msg)) {
         return new Error(
-            "The network rejected this transaction while estimating gas. This usually means the paying account doesn't hold enough ALKE " +
-            "(the payment plus a little for gas), or the call would fail. Check your balance and try again."
+            "The network couldn't process this transaction (RPC internal error). Your funds weren't moved. " +
+            "Please try again in a moment, and contact the Alkebuleum team if it keeps happening."
         );
     }
     return e;
@@ -148,17 +169,20 @@ export function WalletProvider({ children }) {
             }
         }
         if (c.type === "nuru-browser") {
-            // The Nuru browser wraps the call through the Nuru Account itself.
+            // The Nuru browser wraps the call through the Nuru Account itself (adding
+            // its own execute() overhead to our gas), so the Nuru Account is msg.sender.
+            const gas = tx.gas ? BigInt(tx.gas) : await gasFor(c.address, tx, value);
             const hash = await window.ethereum.request({
                 method: "eth_sendTransaction",
-                params: [{ to: tx.to, data: tx.data || "0x", value: "0x" + value.toString(16) }],
+                params: [{ to: tx.to, data: tx.data || "0x", value: "0x" + value.toString(16), gas: "0x" + gas.toString(16) }],
             });
             await waitMined(hash);
             return hash;
         }
         const { getSigner } = await import("../../lib/wallet");
         const signer = await getSigner();
-        const sent = await signer.sendTransaction({ to: tx.to, data: tx.data || "0x", value });
+        const gasLimit = tx.gas ? BigInt(tx.gas) : await gasFor(c.address, tx, value);
+        const sent = await signer.sendTransaction({ to: tx.to, data: tx.data || "0x", value, gasLimit });
         await waitMined(sent.hash);
         return sent.hash;
     };
