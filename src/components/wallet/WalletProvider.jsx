@@ -247,7 +247,7 @@ export function WalletButton() {
                             <div className="text-xs text-ink-mute">Nuru Account</div>
                             <div className="mt-0.5 font-medium">{conn.handle || (conn.ain ? `AIN ${conn.ain}` : shortHash(conn.address, 4))}</div>
                             {conn.handle && conn.ain && <div className="text-xs text-ink-mute">AIN {conn.ain}</div>}
-                            <BalanceLine wei={bal(conn.address)} note="Holds funds, pays fees" />
+                            <BalanceLine wei={bal(conn.address)} note="Holds funds securely" />
                             <div className="mt-3 text-xs text-ink-mute">Signer key</div>
                             <div className="mt-0.5 flex items-start gap-1">
                                 <span className="min-w-0 break-all font-mono text-xs">{conn.signer}</span>
