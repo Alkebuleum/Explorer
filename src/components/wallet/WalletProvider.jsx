@@ -24,31 +24,41 @@ async function waitMined(txHash) {
     throw new Error("Transaction not confirmed yet. Check your wallet for its status.");
 }
 
-const toAlke = (wei) => (Number(wei / 10n ** 15n) / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 });
+export const toAlke = (wei) => (Number(wei / 10n ** 15n) / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 });
 const balanceOf = async (addr) => BigInt(await rpc("eth_getBalance", [addr, "latest"]));
 const PRIMARY_SELECTOR = "0xc6dbdf61"; // primary()
+
+// Where a payment's ALKE comes from and whether it covers `value`.
+// Null when we can't tell (a Nuru session without its Nuru Account address).
+export async function checkFunds(c, value) {
+    const isNuru = c.type === "nuru" || c.type === "nuru-browser";
+    if (isNuru && (!c.signer || c.address.toLowerCase() === c.signer.toLowerCase())) return null;
+    const balance = await balanceOf(c.address);
+    let gasKeyEmpty = false;
+    if (isNuru) {
+        // The primary key pays gas for execute(); linked keys go through the gasless relay.
+        const primary = await rpc("eth_call", [{ to: c.address, data: PRIMARY_SELECTOR }, "latest"]).catch(() => null);
+        if (primary && primary.length >= 66 && ("0x" + primary.slice(-40)).toLowerCase() === c.signer.toLowerCase()) {
+            gasKeyEmpty = (await balanceOf(c.signer)) === 0n;
+        }
+    }
+    return { isNuru, balance, enough: balance >= value, gasKeyEmpty };
+}
 
 // Checks funds before asking the wallet, so a shortfall gets a clear message
 // instead of a failed gas estimate (Besu reports those as "-32603 internal error").
 async function preflight(c, value) {
-    const isNuru = c.type === "nuru" || c.type === "nuru-browser";
-    // Without the Nuru Account address (identity unavailable) we can't tell where funds live.
-    if (isNuru && (!c.signer || c.address.toLowerCase() === c.signer.toLowerCase())) return;
-    const bal = await balanceOf(c.address);
-    if (bal < value) {
+    const f = await checkFunds(c, value);
+    if (!f) return;
+    if (!f.enough) {
         throw new Error(
-            `${isNuru ? "Your Nuru Account" : "Your wallet"} (${shortHash(c.address)}) holds ${toAlke(bal)} ALKE, but this payment needs ${toAlke(value)} ALKE` +
-            `${isNuru ? "" : " plus a little for gas"}. ` +
-            (isNuru ? "Move ALKE into your Nuru Account (not just the signing key) and try again." : "Top it up and try again.")
+            `${f.isNuru ? "Your Nuru Account" : "Your wallet"} (${shortHash(c.address)}) holds ${toAlke(f.balance)} ALKE, but this payment needs ${toAlke(value)} ALKE` +
+            `${f.isNuru ? "" : " plus a little for gas"}. ` +
+            (f.isNuru ? "Move ALKE into your Nuru Account (not just the signing key) and try again." : "Top it up and try again.")
         );
     }
-    if (!isNuru) return;
-    // The primary key pays gas for execute(); linked keys go through the gasless relay.
-    const primary = await rpc("eth_call", [{ to: c.address, data: PRIMARY_SELECTOR }, "latest"]).catch(() => null);
-    if (primary && primary.length >= 66 && ("0x" + primary.slice(-40)).toLowerCase() === c.signer.toLowerCase()) {
-        if ((await balanceOf(c.signer)) === 0n) {
-            throw new Error(`Your Nuru signing key (${shortHash(c.signer)}) has no ALKE to pay gas. Send it a small amount of ALKE and try again.`);
-        }
+    if (f.gasKeyEmpty) {
+        throw new Error(`Your Nuru signing key (${shortHash(c.signer)}) has no ALKE to pay gas. Send it a small amount of ALKE and try again.`);
     }
 }
 

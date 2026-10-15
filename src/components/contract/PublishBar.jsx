@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore/lite";
 import { Spinner } from "../ui/Loading";
 import { useWallet } from "../wallet/WalletProvider";
+import PayerBalance from "../wallet/PayerBalance";
 import { db, isAdminUser, currentUser } from "../../lib/firebase";
 import { publishVerified } from "../../lib/verifiedStore";
 import { VERIFY_FEE_ALKE, payVerificationFee, submitVerificationRequest } from "../../lib/verificationRequests";
@@ -88,6 +89,7 @@ export default function PublishBar({ record, onPublished }) {
                         : `Publish it for everyone for ${VERIFY_FEE_ALKE.toLocaleString()} ${CHAIN_CURRENCY}. The team re-checks the source before it goes live.`}
                 </p>
                 {paidTx && !admin && <p className="mt-1 text-xs text-ink-mute">Fee already paid ({paidTx.slice(0, 10)}…). Submitting won't charge you again.</p>}
+                {!admin && !paidTx && <PayerBalance feeAlke={VERIFY_FEE_ALKE} className="mt-1" />}
                 {step && <p className="mt-1 flex items-center gap-2 text-ink-mute"><Spinner className="h-3 w-3" />{step}</p>}
                 {err && <p className="mt-1 text-rose-600 dark:text-rose-300">{err}</p>}
             </div>

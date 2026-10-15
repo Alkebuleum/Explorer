@@ -6,10 +6,11 @@ import ErrorBanner from "../components/ui/ErrorBanner";
 import Loading, { Spinner } from "../components/ui/Loading";
 import TokenLogo from "../components/ui/TokenLogo";
 import { rpc, CHAIN_CURRENCY } from "../lib/rpc";
-import { shortHash, formatUnits } from "../lib/format";
+import { formatUnits } from "../lib/format";
 import { probeErc20 } from "../lib/erc20";
 import { getRegistryToken, refreshRegistry } from "../lib/tokenRegistry";
 import { useWallet } from "../components/wallet/WalletProvider";
+import PayerBalance from "../components/wallet/PayerBalance";
 import {
     REGISTRY_FEE_ALKE, REGISTRY_TREASURY, payRegistryFee, submitRegistration, loadPendingPayment,
 } from "../lib/registerToken";
@@ -188,11 +189,9 @@ export default function RegisterTokenPage() {
                                     {busy && <Spinner className="h-3.5 w-3.5 border-white/40 border-t-white" />}
                                     {resumeTx.trim() ? "Resume registration" : `Pay ${REGISTRY_FEE_ALKE.toLocaleString()} ${CHAIN_CURRENCY} & register`}
                                 </button>
-                                {!busy && !resumeTx.trim() && (
-                                    <span className="text-xs text-ink-mute">
-                                        {conn ? `Paying from ${conn.handle || shortHash(conn.address, 4)}` : "You'll connect Nuru or a browser wallet to pay."}
-                                    </span>
-                                )}
+                                {!busy && !resumeTx.trim() && (conn
+                                    ? <PayerBalance feeAlke={REGISTRY_FEE_ALKE} />
+                                    : <span className="text-xs text-ink-mute">You'll connect Nuru or a browser wallet to pay.</span>)}
                                 {step && <span className="text-sm text-ink-mute">{step}</span>}
                             </div>
                         </>
