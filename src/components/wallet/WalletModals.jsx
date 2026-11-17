@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Spinner } from "../ui/Loading";
-import { LogoMark } from "../layout/Logo";
 import { connectWallet, hasWallet } from "../../lib/wallet";
 import { CHAIN_NAME } from "../../lib/rpc";
 import { nuruConnect, nuruInjected, nuruBrowserConnect, NURU_PLAY_STORE } from "../../lib/nuru";
@@ -67,7 +66,7 @@ export function ConnectModal({ onConnected, onClose }) {
             ) : (
                 <div className="space-y-2">
                     <button onClick={() => run("nuru", () => nuruConnect(setUri))} disabled={!!busy} className="flex w-full items-center gap-3 rounded-xl border border-line-2 p-3 text-left transition-colors hover:border-violet">
-                        <LogoMark className="h-8 w-8" />
+                        <img src={`${process.env.PUBLIC_URL}/nuru.png`} alt="" className="h-8 w-8 rounded-lg" />
                         <span className="flex-1">
                             <span className="block font-medium">Nuru</span>
                             <span className="block text-xs text-ink-mute">Scan a QR code with the Nuru app</span>

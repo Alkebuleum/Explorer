@@ -1,20 +1,21 @@
 import React from "react";
 
-// Alkebuleum hex-shield mark (from alkebuleum.org) with the AlkeScan wordmark.
+// AlkeScan mark: the Alke block inside scanner corners with a scan line
+// (its own mark, not the Alkebuleum shield, so it reads apart from the other
+// Alke apps). The corners follow the text colour (light and dark themes).
 export function LogoMark({ className = "h-8 w-8" }) {
     return (
-        <svg viewBox="0 0 100 110" className={className} aria-hidden>
-            <path
-                fill="#8b6dff" stroke="#8b6dff" strokeWidth="1" strokeLinejoin="round"
-                d="M50,7 L86,28 Q90,30.5 90,35 L90,75 Q90,79.5 86,82 L50,103 L14,82 Q10,79.5 10,75 L10,35 Q10,30.5 14,28 Z"
-            />
-            <g fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="50" y1="27" x2="50" y2="83" />
-                <polyline points="30,42 42,55 30,68" />
-                <polyline points="20,45 29.3,55 20,65" />
-                <polyline points="70,42 58,55 70,68" />
-                <polyline points="80,45 70.7,55 80,65" />
+        <svg viewBox="0 0 100 100" className={`${className} text-ink`} aria-hidden>
+            <g fill="none" stroke="currentColor" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 30 V16 a6 6 0 0 1 6 -6 H30" />
+                <path d="M70 10 H84 a6 6 0 0 1 6 6 V30" />
+                <path d="M90 70 V84 a6 6 0 0 1 -6 6 H70" />
+                <path d="M30 90 H16 a6 6 0 0 1 -6 -6 V70" />
             </g>
+            <path d="M50 24 L72 37 L72 63 L50 76 L28 63 L28 37 Z" fill="#7556FF" />
+            <path d="M50 24 L72 37 L50 50 L28 37 Z" fill="#9B85FF" />
+            <path d="M50 50 L50 76" stroke="#5A3BE8" strokeWidth="2" />
+            <rect x="18" y="47" width="64" height="6" rx="3" fill="#14C8E0" />
         </svg>
     );
 }
